@@ -1,0 +1,33 @@
+# Sensitive files
+.env
+*.env.local
+
+# Database / SQLite
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Scratch & temporary files
+scratch_*.txt
+*.tmp
+
+# Node (legacy)
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

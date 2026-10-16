@@ -1,0 +1,29 @@
+{
+  "_comment": "Maps internal Rate Radar fields to dotted paths in the Zipaworld API response item object.",
+  "_status": "ALL MAPPINGS MARKED UNVERIFIED – update when API docs are available",
+  "_instructions": [
+    "Each value is either a single dotted path string or an array of dotted paths (first non-null wins).",
+    "Use null to explicitly mark a field as unavailable in the API.",
+    "Set _status to VERIFIED once confirmed against real API docs."
+  ],
+  "fields": {
+    "id":                 { "paths": ["id", "rateId", "rate_id"],                     "verified": false },
+    "originName":         { "paths": ["originName", "origin_name", "origin"],         "verified": false },
+    "destinationName":    { "paths": ["destinationName", "destination_name", "destination"], "verified": false },
+    "shipmentMode":       { "paths": ["shipmentMode", "shipment_mode", "mode"],       "verified": false },
+    "containerName":      { "paths": ["containerName", "container_name", "container"],"verified": false },
+    "shippingLineName":   { "paths": ["shippingLineName", "shipping_line_name", "carrier", "carrierName"], "verified": false },
+    "rate":               { "paths": ["rate", "baseRate", "base_rate", "amount"],     "verified": false },
+    "currency":           { "paths": ["currency", "currencyCode", "currency_code"],   "verified": false },
+    "validityStartDate":  { "paths": ["validityStartDate", "validity_start_date", "validFrom", "valid_from", "effectiveDate"], "verified": false },
+    "validityEndDate":    { "paths": ["validityEndDate", "validity_end_date", "validTo", "valid_to", "expiryDate"], "verified": false },
+    "rateType":           { "paths": ["rateType", "rate_type", "direction"],          "verified": false },
+    "originPortCode":     { "paths": ["originPortCode", "origin_port_code", "pol", "portOfLoading"], "verified": false },
+    "destinationPortCode":{ "paths": ["destinationPortCode", "destination_port_code", "pod", "portOfDischarge"], "verified": false },
+    "originCountry":      { "paths": ["originCountry", "origin_country"],             "verified": false },
+    "destinationCountry": { "paths": ["destinationCountry", "destination_country"],   "verified": false },
+    "createdAt":          { "paths": ["createdAt", "created_at", "createdDate"],      "verified": false },
+    "updatedAt":          { "paths": ["updatedAt", "updated_at", "modifiedAt", "modifiedDate"], "verified": false },
+    "sourceStatus":       { "paths": ["status", "rateStatus", "rate_status"],         "verified": false }
+  }
+}
