@@ -93,17 +93,27 @@ def create_app() -> FastAPI:
         logger.info("=== Zipaworld Rate Radar starting ===")
         logger.info("Mode: %s", settings.radar_mode.upper())
 
-        # Init DB
-        db.init_db()
-        db.seed_defaults(DEFAULT_WATCHED_COUNTRIES, DEFAULT_WATCHED_PORTS, DEFAULT_WATCHED_INDIA)
+        # ── Critical: Database initialization & seeding ──────────────────────
+        try:
+            db.init_db()
+            db.seed_defaults(DEFAULT_WATCHED_COUNTRIES, DEFAULT_WATCHED_PORTS, DEFAULT_WATCHED_INDIA)
+        except Exception as exc:
+            logger.critical("Fatal error during database initialization: %s", exc, exc_info=True)
+            raise
 
-        # Initial sync
+        # ── Non-critical: Initial sync on startup ─────────────────────────────
         if settings.is_demo or settings.api_configured:
             logger.info("Running initial sync on startup…")
-            await run_sync(settings, is_demo=settings.is_demo)
+            try:
+                await run_sync(settings, is_demo=settings.is_demo)
+            except Exception as exc:
+                logger.warning("Initial synchronization failed on startup (non-fatal): %s", exc, exc_info=True)
 
-        # Start auto-sync scheduler
-        start_scheduler(settings)
+        # ── Non-critical: Auto-sync scheduler ─────────────────────────────────
+        try:
+            start_scheduler(settings)
+        except Exception as exc:
+            logger.warning("Could not start background scheduler (non-fatal): %s", exc, exc_info=True)
 
     @app.on_event("shutdown")
     async def shutdown():

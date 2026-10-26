@@ -4,14 +4,29 @@ SQLite persistence layer via stdlib sqlite3. All writes inside transactions.
 """
 from __future__ import annotations
 
+import errno
 import json
+import logging
+import os
 import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-DB_PATH = Path("data") / "rates.db"
+logger = logging.getLogger(__name__)
+
+
+def _resolve_default_db_path() -> Path:
+    env_path = os.environ.get("RADAR_DB_PATH")
+    if env_path:
+        return Path(env_path)
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path("/tmp") / "rates.db"
+    return Path("data") / "rates.db"
+
+
+DB_PATH = _resolve_default_db_path()
 _lock = threading.Lock()
 
 # ── Schema ────────────────────────────────────────────────────────────────────
@@ -107,10 +122,41 @@ CREATE TABLE IF NOT EXISTS india_port_overrides (
 
 def init_db(path: Path | None = None) -> None:
     """Create data directory, database file and all tables if they don't exist."""
+    global DB_PATH
     p = path or DB_PATH
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(str(p)) as conn:
-        conn.executescript(SCHEMA_SQL)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(str(p)) as conn:
+            conn.executescript(SCHEMA_SQL)
+    except (OSError, sqlite3.OperationalError) as exc:
+        is_permission_or_ro = (
+            isinstance(exc, PermissionError)
+            or getattr(exc, "errno", None) in (errno.EROFS, errno.EACCES)
+            or "read-only" in str(exc).lower()
+            or "unable to open database file" in str(exc).lower()
+        )
+        if not is_permission_or_ro:
+            raise
+
+        fallback = Path("/tmp") / "rates.db"
+        if p != fallback:
+            is_explicit = path is not None or bool(os.environ.get("RADAR_DB_PATH"))
+            if is_explicit:
+                logger.error(
+                    "Configured database path '%s' could not be initialized (%s); falling back to temporary database '%s'",
+                    p, exc, fallback,
+                )
+            else:
+                logger.warning(
+                    "Default database path '%s' is not writable (%s); falling back to temporary database '%s'",
+                    p, exc, fallback,
+                )
+            DB_PATH = fallback
+            fallback.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(str(fallback)) as conn:
+                conn.executescript(SCHEMA_SQL)
+        else:
+            raise
 
 
 @contextmanager

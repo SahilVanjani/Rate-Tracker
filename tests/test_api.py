@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -209,3 +210,77 @@ class TestDemoBadge:
         resp = client.get("/api/config")
         assert resp.json()["isDemo"] is True
         assert resp.json()["radarMode"] == "demo"
+
+
+class TestServerlessDatabaseResolution:
+    def test_default_path_when_vercel_env_set(self, monkeypatch):
+        monkeypatch.setenv("VERCEL", "1")
+        from app.store.database import _resolve_default_db_path
+        assert _resolve_default_db_path() == Path("/tmp/rates.db")
+
+    def test_default_path_when_aws_lambda_env_set(self, monkeypatch):
+        monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "my_func")
+        from app.store.database import _resolve_default_db_path
+        assert _resolve_default_db_path() == Path("/tmp/rates.db")
+
+    def test_custom_radar_db_path_takes_priority(self, monkeypatch):
+        monkeypatch.setenv("RADAR_DB_PATH", "custom/db.sqlite")
+        from app.store.database import _resolve_default_db_path
+        assert _resolve_default_db_path() == Path("custom/db.sqlite")
+
+    def test_init_db_falls_back_on_unwritable_path(self, tmp_path):
+        import errno
+        from unittest.mock import patch
+        from app.store import database as dmod
+
+        old_path = dmod.DB_PATH
+        target_path = tmp_path / "simulated_readonly" / "rates.db"
+        orig_mkdir = Path.mkdir
+
+        def conditional_mkdir(self, *args, **kwargs):
+            if str(self) == str(target_path.parent):
+                raise OSError(errno.EROFS, "Read-only file system")
+            return orig_mkdir(self, *args, **kwargs)
+
+        try:
+            with patch.object(Path, "mkdir", side_effect=conditional_mkdir, autospec=True):
+                dmod.init_db(target_path)
+            assert dmod.DB_PATH == Path("/tmp/rates.db")
+        finally:
+            dmod.DB_PATH = old_path
+
+    def test_init_db_re_raises_unrelated_oserror(self, tmp_path):
+        import errno
+        from unittest.mock import patch
+        from app.store import database as dmod
+
+        target_path = tmp_path / "simulated_disk_full" / "rates.db"
+
+        def enospc_mkdir(self, *args, **kwargs):
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+        with patch.object(Path, "mkdir", side_effect=enospc_mkdir, autospec=True):
+            with pytest.raises(OSError) as excinfo:
+                dmod.init_db(target_path)
+            assert excinfo.value.errno == errno.ENOSPC
+
+    def test_critical_db_init_failure_raises(self):
+        from unittest.mock import patch
+        from app.main import create_app
+        app = create_app()
+        with patch("app.store.database.init_db", side_effect=RuntimeError("Fatal DB Error")):
+            with pytest.raises(RuntimeError, match="Fatal DB Error"):
+                with TestClient(app):
+                    pass
+
+    def test_noncritical_sync_failure_does_not_abort_startup(self, monkeypatch, tmp_path):
+        from unittest.mock import patch
+        from app.main import create_app
+        monkeypatch.setenv("RADAR_DB_PATH", str(tmp_path / "test.db"))
+        app = create_app()
+        with patch("app.main.run_sync", side_effect=Exception("API connection timeout")):
+            with TestClient(app) as client:
+                resp = client.get("/api/config")
+                assert resp.status_code == 200
+
+

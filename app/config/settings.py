@@ -125,6 +125,8 @@ class Settings(BaseSettings):
 
     def load_field_map(self) -> dict:
         path = Path("config") / "field-map.json"
+        if not path.exists():
+            path = Path(__file__).resolve().parent.parent.parent / "config" / "field-map.json"
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
         return {}
